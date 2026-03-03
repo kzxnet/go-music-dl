@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -72,135 +71,6 @@ var (
 
 	checkedStyle = lipgloss.NewStyle().Foreground(greenColor).Bold(true)
 )
-
-// --- ID3v2 元数据内嵌帮助函数 ---
-
-func encodeSyncSafeInt(v int) [4]byte {
-	if v < 0 {
-		v = 0
-	}
-	return [4]byte{
-		byte((v >> 21) & 0x7F),
-		byte((v >> 14) & 0x7F),
-		byte((v >> 7) & 0x7F),
-		byte(v & 0x7F),
-	}
-}
-
-func decodeSyncSafeInt(b []byte) int {
-	if len(b) < 4 {
-		return 0
-	}
-	return int(b[0]&0x7F)<<21 | int(b[1]&0x7F)<<14 | int(b[2]&0x7F)<<7 | int(b[3]&0x7F)
-}
-
-func stripID3v2Prefix(audioData []byte) []byte {
-	if len(audioData) < 10 || string(audioData[:3]) != "ID3" {
-		return audioData
-	}
-	tagSize := decodeSyncSafeInt(audioData[6:10])
-	total := 10 + tagSize
-	if audioData[5]&0x10 != 0 {
-		total += 10
-	}
-	if total <= 0 || total > len(audioData) {
-		return audioData
-	}
-	return audioData[total:]
-}
-
-func buildID3v24Frame(frameID string, payload []byte) []byte {
-	if len(frameID) != 4 || len(payload) == 0 {
-		return nil
-	}
-	var frame bytes.Buffer
-	frame.WriteString(frameID)
-	sz := encodeSyncSafeInt(len(payload))
-	frame.Write(sz[:])
-	frame.Write([]byte{0x00, 0x00})
-	frame.Write(payload)
-	return frame.Bytes()
-}
-
-func buildTextFrame(frameID string, text string) []byte {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return nil
-	}
-	payload := append([]byte{0x03}, []byte(text)...)
-	return buildID3v24Frame(frameID, payload)
-}
-
-func normalizeCoverMime(coverMime string) string {
-	coverMime = strings.TrimSpace(strings.ToLower(coverMime))
-	if coverMime == "" {
-		return "image/jpeg"
-	}
-	if strings.Contains(coverMime, "png") {
-		return "image/png"
-	}
-	if strings.Contains(coverMime, "webp") {
-		return "image/webp"
-	}
-	if strings.Contains(coverMime, "gif") {
-		return "image/gif"
-	}
-	return "image/jpeg"
-}
-
-func embedSongMetadata(audioData []byte, song *model.Song, lyric string, coverData []byte, coverMime string) ([]byte, error) {
-	audioData = stripID3v2Prefix(audioData)
-
-	var frames bytes.Buffer
-
-	if frame := buildTextFrame("TIT2", song.Name); len(frame) > 0 {
-		frames.Write(frame)
-	}
-	if frame := buildTextFrame("TPE1", song.Artist); len(frame) > 0 {
-		frames.Write(frame)
-	}
-
-	lyric = strings.TrimSpace(lyric)
-	if lyric != "" {
-		payload := make([]byte, 0, 8+len(lyric))
-		payload = append(payload, 0x03)
-		payload = append(payload, []byte("chi")...)
-		payload = append(payload, 0x00)
-		payload = append(payload, []byte(lyric)...)
-		if frame := buildID3v24Frame("USLT", payload); len(frame) > 0 {
-			frames.Write(frame)
-		}
-	}
-
-	if len(coverData) > 0 {
-		mime := normalizeCoverMime(coverMime)
-		payload := make([]byte, 0, len(mime)+4+len(coverData))
-		payload = append(payload, 0x03)
-		payload = append(payload, []byte(mime)...)
-		payload = append(payload, 0x00)
-		payload = append(payload, 0x03)
-		payload = append(payload, 0x00)
-		payload = append(payload, coverData...)
-		if frame := buildID3v24Frame("APIC", payload); len(frame) > 0 {
-			frames.Write(frame)
-		}
-	}
-
-	if frames.Len() == 0 {
-		return audioData, nil
-	}
-
-	var tag bytes.Buffer
-	tag.WriteString("ID3")
-	tag.WriteByte(0x04)
-	tag.WriteByte(0x00)
-	tag.WriteByte(0x00)
-	size := encodeSyncSafeInt(frames.Len())
-	tag.Write(size[:])
-	tag.Write(frames.Bytes())
-
-	return append(tag.Bytes(), audioData...), nil
-}
 
 // --- Cookie 管理 ---
 type CookieManager struct {
@@ -1273,7 +1143,7 @@ func downloadSongWithCookie(song *model.Song, outDir string, withCover bool, wit
 
 	// 5. 内嵌元数据到 ID3（如有数据）
 	if lyricStr != "" || len(coverData) > 0 {
-		if embeddedData, err := embedSongMetadata(finalData, song, lyricStr, coverData, coverMime); err == nil {
+		if embeddedData, err := core.EmbedSongMetadata(finalData, song, lyricStr, coverData, coverMime); err == nil {
 			finalData = embeddedData
 		}
 	}

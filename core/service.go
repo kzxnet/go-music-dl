@@ -1,8 +1,10 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -603,4 +605,169 @@ func GetSourceDescription(source string) string {
 		return desc
 	}
 	return "未知音乐源"
+}
+
+// ==========================================
+// ID3v2 元数据内嵌（支持 Web & CLI 下载）
+// ==========================================
+
+func EncodeSyncSafeInt(v int) [4]byte {
+	if v < 0 {
+		v = 0
+	}
+	return [4]byte{
+		byte((v >> 21) & 0x7F),
+		byte((v >> 14) & 0x7F),
+		byte((v >> 7) & 0x7F),
+		byte(v & 0x7F),
+	}
+}
+
+func DecodeSyncSafeInt(b []byte) int {
+	if len(b) < 4 {
+		return 0
+	}
+	return int(b[0]&0x7F)<<21 | int(b[1]&0x7F)<<14 | int(b[2]&0x7F)<<7 | int(b[3]&0x7F)
+}
+
+func StripID3v2Prefix(audioData []byte) []byte {
+	if len(audioData) < 10 || string(audioData[:3]) != "ID3" {
+		return audioData
+	}
+	tagSize := DecodeSyncSafeInt(audioData[6:10])
+	total := 10 + tagSize
+	if audioData[5]&0x10 != 0 {
+		total += 10
+	}
+	if total <= 0 || total > len(audioData) {
+		return audioData
+	}
+	return audioData[total:]
+}
+
+func BuildID3v24Frame(frameID string, payload []byte) []byte {
+	if len(frameID) != 4 || len(payload) == 0 {
+		return nil
+	}
+	var frame bytes.Buffer
+	frame.WriteString(frameID)
+	sz := EncodeSyncSafeInt(len(payload))
+	frame.Write(sz[:])
+	frame.Write([]byte{0x00, 0x00})
+	frame.Write(payload)
+	return frame.Bytes()
+}
+
+func BuildTextFrame(frameID string, text string) []byte {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	payload := append([]byte{0x03}, []byte(text)...)
+	return BuildID3v24Frame(frameID, payload)
+}
+
+func NormalizeCoverMime(coverMime string) string {
+	coverMime = strings.TrimSpace(strings.ToLower(coverMime))
+	if coverMime == "" {
+		return "image/jpeg"
+	}
+	if strings.Contains(coverMime, "png") {
+		return "image/png"
+	}
+	if strings.Contains(coverMime, "webp") {
+		return "image/webp"
+	}
+	if strings.Contains(coverMime, "gif") {
+		return "image/gif"
+	}
+	return "image/jpeg"
+}
+
+func FetchBytesWithMime(urlStr string, source string) ([]byte, string, error) {
+	req, err := BuildSourceRequest("GET", urlStr, source, "")
+	if err != nil {
+		return nil, "", err
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+
+	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if contentType == "" && len(data) > 0 {
+		contentType = http.DetectContentType(data)
+	}
+
+	if idx := strings.Index(contentType, ";"); idx >= 0 {
+		contentType = strings.TrimSpace(contentType[:idx])
+	}
+
+	return data, contentType, nil
+}
+
+func EmbedSongMetadata(audioData []byte, song *model.Song, lyric string, coverData []byte, coverMime string) ([]byte, error) {
+	audioData = StripID3v2Prefix(audioData)
+
+	var frames bytes.Buffer
+
+	if frame := BuildTextFrame("TIT2", song.Name); len(frame) > 0 {
+		frames.Write(frame)
+	}
+	if frame := BuildTextFrame("TPE1", song.Artist); len(frame) > 0 {
+		frames.Write(frame)
+	}
+
+	lyric = strings.TrimSpace(lyric)
+	if lyric != "" {
+		payload := make([]byte, 0, 8+len(lyric))
+		payload = append(payload, 0x03)
+		payload = append(payload, []byte("chi")...)
+		payload = append(payload, 0x00)
+		payload = append(payload, []byte(lyric)...)
+		if frame := BuildID3v24Frame("USLT", payload); len(frame) > 0 {
+			frames.Write(frame)
+		}
+	}
+
+	if len(coverData) > 0 {
+		mime := NormalizeCoverMime(coverMime)
+		payload := make([]byte, 0, len(mime)+4+len(coverData))
+		payload = append(payload, 0x03)
+		payload = append(payload, []byte(mime)...)
+		payload = append(payload, 0x00)
+		payload = append(payload, 0x03)
+		payload = append(payload, 0x00)
+		payload = append(payload, coverData...)
+		if frame := BuildID3v24Frame("APIC", payload); len(frame) > 0 {
+			frames.Write(frame)
+		}
+	}
+
+	if frames.Len() == 0 {
+		return audioData, nil
+	}
+
+	var tag bytes.Buffer
+	tag.WriteString("ID3")
+	tag.WriteByte(0x04)
+	tag.WriteByte(0x00)
+	tag.WriteByte(0x00)
+	size := EncodeSyncSafeInt(frames.Len())
+	tag.Write(size[:])
+	tag.Write(frames.Bytes())
+
+	return append(tag.Bytes(), audioData...), nil
 }
