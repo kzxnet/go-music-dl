@@ -26,7 +26,7 @@ function saveWebSettings() {
     }
 }
 
-function buildDownloadURL(id, source, name, artist, cover) {
+function buildDownloadURL(id, source, name, artist, cover, extra) {
     const params = new URLSearchParams({
         id: String(id || ''),
         source: String(source || ''),
@@ -37,6 +37,10 @@ function buildDownloadURL(id, source, name, artist, cover) {
     const coverValue = String(cover || '');
     if (coverValue !== '') {
         params.set('cover', coverValue);
+    }
+    const extraValue = String(extra || '');
+    if (extraValue !== '' && extraValue !== '{}' && extraValue !== 'null') {
+        params.set('extra', extraValue);
     }
     if (webSettings.embedDownload) {
         params.set('embed', '1');
@@ -51,7 +55,7 @@ function refreshDownloadLinks() {
         if (!dl) return;
 
         const ds = card.dataset;
-        dl.href = buildDownloadURL(ds.id, ds.source, ds.name, ds.artist, ds.cover || '');
+        dl.href = buildDownloadURL(ds.id, ds.source, ds.name, ds.artist, ds.cover || '', ds.extra || '');
     });
 }
 
@@ -154,8 +158,18 @@ function inspectSong(card) {
     const id = card.dataset.id;
     const source = card.dataset.source;
     const duration = card.dataset.duration;
+    const extra = card.dataset.extra || '';
 
-    fetch(`${API_ROOT}/inspect?id=${encodeURIComponent(id)}&source=${source}&duration=${duration}`)
+    const params = new URLSearchParams({
+        id: String(id || ''),
+        source: String(source || ''),
+        duration: String(duration || '')
+    });
+    if (extra !== '' && extra !== '{}' && extra !== 'null') {
+        params.set('extra', extra);
+    }
+
+    fetch(`${API_ROOT}/inspect?${params.toString()}`)
         .then(r => r.json())
         .then(data => {
             const sizeTag = document.getElementById(`size-${id}`);
@@ -384,6 +398,7 @@ function updateCardWithSong(card, song) {
     card.dataset.name = song.name || card.dataset.name;
     card.dataset.artist = song.artist || card.dataset.artist;
     card.dataset.cover = song.cover || '';
+    card.dataset.extra = song.extra ? JSON.stringify(song.extra) : '';
 
     const titleEl = card.querySelector('.song-info h3');
     if (titleEl) {
@@ -436,7 +451,7 @@ function updateCardWithSong(card, song) {
 
     const dl = card.querySelector('.btn-download');
     if (dl) {
-        dl.href = buildDownloadURL(song.id, song.source, song.name, song.artist, song.cover || '');
+        dl.href = buildDownloadURL(song.id, song.source, song.name, song.artist, song.cover || '', card.dataset.extra || '');
         dl.id = `dl-${song.id}`;
     }
 
@@ -482,7 +497,7 @@ function syncSongToAPlayer(oldId, newSong) {
         audio.name = newSong.name;
         audio.artist = newSong.artist;
         audio.cover = newSong.cover;
-        audio.url = `${API_ROOT}/download?id=${encodeURIComponent(newSong.id)}&source=${newSong.source}&name=${encodeURIComponent(newSong.name)}&artist=${encodeURIComponent(newSong.artist)}`;
+        audio.url = buildDownloadURL(newSong.id, newSong.source, newSong.name, newSong.artist, newSong.cover || '', newSong.extra ? JSON.stringify(newSong.extra) : '');
         audio.lrc = `${API_ROOT}/lyric?id=${encodeURIComponent(newSong.id)}&source=${newSong.source}`;
         audio.custom_id = newSong.id; 
         audio.source = newSong.source; 
@@ -556,7 +571,7 @@ function playAllAndJumpTo(btn) {
         playlist.push({
             name: ds.name,
             artist: ds.artist,
-            url: `${API_ROOT}/download?id=${encodeURIComponent(ds.id)}&source=${ds.source}&name=${encodeURIComponent(ds.name)}&artist=${encodeURIComponent(ds.artist)}`,
+            url: buildDownloadURL(ds.id, ds.source, ds.name, ds.artist, ds.cover || '', ds.extra || ''),
             cover: coverUrl,
             lrc: `${API_ROOT}/lyric?id=${encodeURIComponent(ds.id)}&source=${ds.source}`,
             theme: '#10b981',

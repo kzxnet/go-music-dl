@@ -1271,7 +1271,7 @@ func validatePlayable(song *model.Song) bool {
 	if fn == nil {
 		return false
 	}
-	urlStr, err := fn(&model.Song{ID: song.ID, Source: song.Source})
+	urlStr, err := fn(song)
 	if err != nil || urlStr == "" {
 		return false
 	}

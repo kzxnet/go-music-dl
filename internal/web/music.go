@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -172,6 +173,7 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 		id := c.Query("id")
 		src := c.Query("source")
 		durStr := c.Query("duration")
+		extra := parseSongExtraQuery(c.Query("extra"))
 
 		var urlStr string
 		var err error
@@ -191,7 +193,7 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 				c.JSON(200, gin.H{"valid": false})
 				return
 			}
-			urlStr, err = fn(&model.Song{ID: id, Source: src})
+			urlStr, err = fn(&model.Song{ID: id, Source: src, Extra: extra})
 			if err != nil || urlStr == "" {
 				c.JSON(200, gin.H{"valid": false})
 				return
@@ -376,6 +378,7 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 		artist := c.Query("artist")
 		coverURL := strings.TrimSpace(c.Query("cover"))
 		embedMeta := c.Query("embed") == "1" && strings.TrimSpace(c.GetHeader("Range")) == ""
+		extra := parseSongExtraQuery(c.Query("extra"))
 
 		if id == "" || source == "" {
 			c.String(400, "Missing params")
@@ -388,7 +391,7 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 			artist = "Unknown"
 		}
 
-		tempSong := &model.Song{ID: id, Source: source, Name: name, Artist: artist, Cover: coverURL}
+		tempSong := &model.Song{ID: id, Source: source, Name: name, Artist: artist, Cover: coverURL, Extra: extra}
 		baseFilename := fmt.Sprintf("%s - %s", name, artist)
 
 		if embedMeta {
@@ -596,4 +599,37 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 		}
 		c.String(200, "[00:00.00] 暂无歌词")
 	})
+}
+
+func parseSongExtraQuery(raw string) map[string]string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		return nil
+	}
+
+	extra := make(map[string]string, len(decoded))
+	for key, value := range decoded {
+		switch v := value.(type) {
+		case string:
+			extra[key] = v
+		case float64:
+			extra[key] = strconv.FormatFloat(v, 'f', 0, 64)
+		case bool:
+			extra[key] = strconv.FormatBool(v)
+		default:
+			b, err := json.Marshal(v)
+			if err == nil {
+				extra[key] = string(b)
+			}
+		}
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	return extra
 }

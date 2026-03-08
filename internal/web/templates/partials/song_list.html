@@ -52,7 +52,8 @@
             data-duration="{{.Duration}}" 
             data-name="{{.Name}}" 
             data-artist="{{.Artist}}"
-            data-cover="{{.Cover}}">
+            data-cover="{{.Cover}}"
+            data-extra='{{tojson .Extra}}'>
             
             <div class="checkbox-wrapper">
                 <input type="checkbox" class="song-checkbox" onclick="event.stopPropagation(); updateBatchToolbar();">
@@ -109,7 +110,7 @@
                 </button>
                 {{ end }}
 
-                <a href="{{$.Root}}/download?id={{.ID}}&source={{.Source}}&name={{.Name}}&artist={{.Artist}}&cover={{urlquery .Cover}}" 
+                <a href="{{$.Root}}/download?id={{.ID}}&source={{.Source}}&name={{.Name}}&artist={{.Artist}}&cover={{urlquery .Cover}}&extra={{urlquery (tojson .Extra)}}" 
                    id="dl-{{.ID}}" class="btn-circle btn-dl btn-download" title="下载歌曲" target="_blank">
                     <i class="fa-solid fa-download"></i>
                 </a>

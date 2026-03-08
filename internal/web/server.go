@@ -2,6 +2,7 @@ package web
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -96,7 +97,18 @@ func Start(port string, shouldOpenBrowser bool, flags FeatureFlags) {
 	r := gin.Default()
 	r.Use(corsMiddleware())
 
-	tmpl := template.Must(template.New("").ParseFS(templateFS,
+	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
+		"tojson": func(v interface{}) string {
+			if v == nil {
+				return ""
+			}
+			b, err := json.Marshal(v)
+			if err != nil {
+				return ""
+			}
+			return string(b)
+		},
+	}).ParseFS(templateFS,
 		"templates/pages/*.html",
 		"templates/partials/*.html",
 	))
