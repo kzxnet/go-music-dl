@@ -255,105 +255,9 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 			return
 		}
 
-		keyword := name
-		if artist != "" {
-			keyword = name + " " + artist
-		}
-
-		var sources []string
-		if target != "" {
-			sources = []string{target}
-		} else {
-			sources = core.GetAllSourceNames()
-		}
-
-		type candidate struct {
-			song    model.Song
-			score   float64
-			durDiff int
-		}
-		var wg sync.WaitGroup
-		var mu sync.Mutex
-		var candidates []candidate
-
-		for _, src := range sources {
-			if src == "" || src == current {
-				continue
-			}
-			if src == "soda" || src == "fivesing" {
-				continue
-			}
-			fn := core.GetSearchFunc(src)
-			if fn == nil {
-				continue
-			}
-
-			wg.Add(1)
-			go func(s string) {
-				defer wg.Done()
-
-				res, err := fn(keyword)
-				if (err != nil || len(res) == 0) && artist != "" {
-					res, _ = fn(name)
-				}
-				if len(res) == 0 {
-					return
-				}
-
-				limit := len(res)
-				if limit > 8 {
-					limit = 8
-				}
-
-				for i := 0; i < limit; i++ {
-					cand := res[i]
-					cand.Source = s
-					score := core.CalcSongSimilarity(name, artist, cand.Name, cand.Artist)
-					if score <= 0 {
-						continue
-					}
-
-					durDiff := 0
-					if origDuration > 0 && cand.Duration > 0 {
-						durDiff = core.IntAbs(origDuration - cand.Duration)
-						if !core.IsDurationClose(origDuration, cand.Duration) {
-							continue
-						}
-					}
-
-					mu.Lock()
-					candidates = append(candidates, candidate{song: cand, score: score, durDiff: durDiff})
-					mu.Unlock()
-				}
-			}(src)
-		}
-
-		wg.Wait()
-		if len(candidates) == 0 {
-			c.JSON(404, gin.H{"error": "no match"})
-			return
-		}
-
-		sort.SliceStable(candidates, func(i, j int) bool {
-			if candidates[i].score == candidates[j].score {
-				return candidates[i].durDiff < candidates[j].durDiff
-			}
-			return candidates[i].score > candidates[j].score
-		})
-
-		var selected *model.Song
-		var selectedScore float64
-		for _, cand := range candidates {
-			ok := core.ValidatePlayable(&cand.song)
-			if ok {
-				tmp := cand.song
-				selected = &tmp
-				selectedScore = cand.score
-				break
-			}
-		}
-		if selected == nil {
-			c.JSON(404, gin.H{"error": "no playable match"})
+		selected, selectedScore, err := findBestSwitchSong(name, artist, current, target, origDuration)
+		if err != nil {
+			c.JSON(404, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -564,6 +468,112 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 		}
 		c.String(200, "[00:00.00] 暂无歌词")
 	})
+}
+
+type switchCandidate struct {
+	song    model.Song
+	score   float64
+	durDiff int
+}
+
+func findBestSwitchSong(name string, artist string, current string, target string, origDuration int) (*model.Song, float64, error) {
+	name = strings.TrimSpace(name)
+	artist = strings.TrimSpace(artist)
+	current = strings.TrimSpace(current)
+	target = strings.TrimSpace(target)
+
+	if name == "" {
+		return nil, 0, fmt.Errorf("missing name")
+	}
+
+	keyword := name
+	if artist != "" {
+		keyword = name + " " + artist
+	}
+
+	var sources []string
+	if target != "" {
+		sources = []string{target}
+	} else {
+		sources = core.GetAllSourceNames()
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var candidates []switchCandidate
+
+	for _, src := range sources {
+		if src == "" || src == current {
+			continue
+		}
+		if src == "soda" || src == "fivesing" {
+			continue
+		}
+		fn := core.GetSearchFunc(src)
+		if fn == nil {
+			continue
+		}
+
+		wg.Add(1)
+		go func(s string, f func(string) ([]model.Song, error)) {
+			defer wg.Done()
+
+			res, err := f(keyword)
+			if (err != nil || len(res) == 0) && artist != "" {
+				res, _ = f(name)
+			}
+			if len(res) == 0 {
+				return
+			}
+
+			limit := len(res)
+			if limit > 8 {
+				limit = 8
+			}
+
+			for i := 0; i < limit; i++ {
+				cand := res[i]
+				cand.Source = s
+				score := core.CalcSongSimilarity(name, artist, cand.Name, cand.Artist)
+				if score <= 0 {
+					continue
+				}
+
+				durDiff := 0
+				if origDuration > 0 && cand.Duration > 0 {
+					durDiff = core.IntAbs(origDuration - cand.Duration)
+					if !core.IsDurationClose(origDuration, cand.Duration) {
+						continue
+					}
+				}
+
+				mu.Lock()
+				candidates = append(candidates, switchCandidate{song: cand, score: score, durDiff: durDiff})
+				mu.Unlock()
+			}
+		}(src, fn)
+	}
+
+	wg.Wait()
+	if len(candidates) == 0 {
+		return nil, 0, fmt.Errorf("no match")
+	}
+
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].score == candidates[j].score {
+			return candidates[i].durDiff < candidates[j].durDiff
+		}
+		return candidates[i].score > candidates[j].score
+	})
+
+	for _, cand := range candidates {
+		if core.ValidatePlayable(&cand.song) {
+			tmp := cand.song
+			return &tmp, cand.score, nil
+		}
+	}
+
+	return nil, 0, fmt.Errorf("no playable match")
 }
 
 func parseSongExtraQuery(raw string) map[string]string {

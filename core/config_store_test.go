@@ -98,24 +98,29 @@ func TestWebSettingsDefaultAndPersist(t *testing.T) {
 	if defaults.CliPageSize != DefaultCLIPageSize {
 		t.Fatalf("default CliPageSize mismatch: got %d want %d", defaults.CliPageSize, DefaultCLIPageSize)
 	}
+	if defaults.DownloadConcurrency != DefaultWebConcurrency {
+		t.Fatalf("default DownloadConcurrency mismatch: got %d want %d", defaults.DownloadConcurrency, DefaultWebConcurrency)
+	}
 
 	if err := SaveWebSettings(WebSettings{
-		EmbedDownload:   true,
-		DownloadToLocal: true,
-		DownloadDir:     "",
-		WebPageSize:     100,
-		CliPageSize:     120,
+		EmbedDownload:       true,
+		DownloadToLocal:     true,
+		DownloadDir:         "",
+		WebPageSize:         100,
+		CliPageSize:         120,
+		DownloadConcurrency: 5,
 	}); err != nil {
 		t.Fatalf("save web settings: %v", err)
 	}
 
 	got := GetWebSettings()
 	want := WebSettings{
-		EmbedDownload:   true,
-		DownloadToLocal: true,
-		DownloadDir:     normalizeWebDownloadDir(DefaultWebDownloadDir),
-		WebPageSize:     100,
-		CliPageSize:     120,
+		EmbedDownload:       true,
+		DownloadToLocal:     true,
+		DownloadDir:         normalizeWebDownloadDir(DefaultWebDownloadDir),
+		WebPageSize:         100,
+		CliPageSize:         120,
+		DownloadConcurrency: 5,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("saved settings mismatch\ngot:  %#v\nwant: %#v", got, want)
@@ -137,6 +142,9 @@ func TestWebSettingsDefaultAndPersist(t *testing.T) {
 	}
 	if got.CliPageSize != DefaultCLIPageSize {
 		t.Fatalf("custom save should fallback CliPageSize to default: got %d want %d", got.CliPageSize, DefaultCLIPageSize)
+	}
+	if got.DownloadConcurrency != DefaultWebConcurrency {
+		t.Fatalf("custom save should fallback DownloadConcurrency to default: got %d want %d", got.DownloadConcurrency, DefaultWebConcurrency)
 	}
 
 	absoluteDir := filepath.Join(baseDir, "downloads", "absolute")

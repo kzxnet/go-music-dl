@@ -18,6 +18,7 @@ const (
 	DefaultWebDownloadDir = "data/downloads"
 	DefaultWebPageSize    = 50
 	DefaultCLIPageSize    = 50
+	DefaultWebConcurrency = 3
 	webSettingsKey        = "web_settings"
 )
 
@@ -34,11 +35,12 @@ type cookieEntry struct {
 }
 
 type WebSettings struct {
-	EmbedDownload   bool   `json:"embedDownload"`
-	DownloadToLocal bool   `json:"downloadToLocal"`
-	DownloadDir     string `json:"downloadDir"`
-	WebPageSize     int    `json:"webPageSize"`
-	CliPageSize     int    `json:"cliPageSize"`
+	EmbedDownload       bool   `json:"embedDownload"`
+	DownloadToLocal     bool   `json:"downloadToLocal"`
+	DownloadDir         string `json:"downloadDir"`
+	WebPageSize         int    `json:"webPageSize"`
+	CliPageSize         int    `json:"cliPageSize"`
+	DownloadConcurrency int    `json:"downloadConcurrency"`
 }
 
 var (
@@ -136,11 +138,12 @@ func migrateLegacyCookies() error {
 
 func defaultWebSettings() WebSettings {
 	return normalizeWebSettings(WebSettings{
-		EmbedDownload:   false,
-		DownloadToLocal: false,
-		DownloadDir:     DefaultWebDownloadDir,
-		WebPageSize:     DefaultWebPageSize,
-		CliPageSize:     DefaultCLIPageSize,
+		EmbedDownload:       false,
+		DownloadToLocal:     false,
+		DownloadDir:         DefaultWebDownloadDir,
+		WebPageSize:         DefaultWebPageSize,
+		CliPageSize:         DefaultCLIPageSize,
+		DownloadConcurrency: DefaultWebConcurrency,
 	})
 }
 
@@ -154,6 +157,15 @@ func normalizeWebSettings(settings WebSettings) WebSettings {
 	}
 	if settings.CliPageSize <= 0 {
 		settings.CliPageSize = DefaultCLIPageSize
+	}
+	if settings.DownloadConcurrency <= 0 {
+		settings.DownloadConcurrency = DefaultWebConcurrency
+	}
+	if settings.DownloadConcurrency > 5 {
+		settings.DownloadConcurrency = 5
+	}
+	if settings.DownloadConcurrency < 1 {
+		settings.DownloadConcurrency = 1
 	}
 	settings.DownloadDir = normalizeWebDownloadDir(settings.DownloadDir)
 	return settings

@@ -27,7 +27,7 @@
         </div>
     </div>
 
-    <div class="batch-toolbar" id="batch-toolbar" data-current-page="{{ .Page }}" data-total-pages="{{ .TotalPages }}" data-total-count="{{ .TotalCount }}">
+    <div class="batch-toolbar" id="batch-toolbar" data-current-page="{{ .Page }}" data-total-pages="{{ .TotalPages }}" data-total-count="{{ .TotalCount }}" data-page-size="{{ .PageSize }}">
         <div class="batch-info">
             <div>
                 <label><input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll(this)"> 全选</label>
@@ -43,9 +43,6 @@
             </button>
             <button class="btn-pill btn-pill-dl" id="btn-batch-dl" onclick="batchDownload()" disabled>
                 <i class="fa-solid fa-download"></i> 批量下载
-            </button>
-            <button class="btn-pill btn-pill-dl" id="btn-batch-dl-all" onclick="batchDownloadAllSongs()">
-                <i class="fa-solid fa-layer-group"></i> 下载全部
             </button>
         </div>
     </div>
