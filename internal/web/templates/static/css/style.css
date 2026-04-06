@@ -175,7 +175,31 @@ body.batch-mode .song-card { padding-left: 10px; }
 .external-link-icon { display: inline-block; margin-left: 5px; color: #a0aec0; transition: color 0.2s; text-decoration: none; }
 .external-link-icon:hover { color: #10b981; }
 
-.artist-line { font-size: 13px; color: var(--text-sub); margin-bottom: 8px; }
+.artist-line {
+    font-size: 13px;
+    color: var(--text-sub);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    line-height: 1.45;
+}
+.artist-icon { font-size: 11px; flex-shrink: 0; }
+.meta-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dashed transparent;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+.meta-link:hover {
+    color: #10b981;
+    border-bottom-color: currentColor;
+}
+.meta-separator {
+    color: #a0aec0;
+    flex-shrink: 0;
+}
 .tags { display: flex; gap: 6px; }
 .tag { font-size: 10px; padding: 3px 8px; border-radius: 6px; background: #edf2f7; color: #718096; font-weight: 600; }
 .tag-src { background: #ebf8ff; color: #3182ce; text-transform: uppercase; }
@@ -415,7 +439,15 @@ body.batch-mode .song-card { padding-left: 10px; }
     .song-card { margin: 0; padding: 12px; border-radius: 12px; align-items: flex-start; }
     .cover-wrapper { width: 54px; height: 54px; margin-right: 12px; border-radius: 8px; }
     .song-info h3 { font-size: 15px; margin-bottom: 4px; max-width: 100%; white-space: normal; }
-    .artist-line { font-size: 12px; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+    .artist-line {
+        font-size: 12px;
+        margin-bottom: 6px;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        max-width: none;
+        gap: 3px;
+    }
     .tags { flex-wrap: wrap; }
     .tag { padding: 2px 5px; }
     

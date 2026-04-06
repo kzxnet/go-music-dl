@@ -5,7 +5,6 @@ const WEB_SETTINGS_KEY = 'musicdl:web_settings';
 const INSPECT_REQUEST_DELAY_MS = 100;
 const DEFAULT_WEB_PAGE_SIZE = 50;
 const DEFAULT_CLI_PAGE_SIZE = 50;
-
 let webSettings = {
     embedDownload: false,
     downloadToLocal: false,
@@ -709,11 +708,128 @@ function formatDuration(seconds) {
     return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
+function escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => {
+        switch (char) {
+        case '&':
+            return '&amp;';
+        case '<':
+            return '&lt;';
+        case '>':
+            return '&gt;';
+        case '"':
+            return '&quot;';
+        case '\'':
+            return '&#39;';
+        default:
+            return char;
+        }
+    });
+}
+
+function containsEastAsianChar(value) {
+    return /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/.test(String(value || ''));
+}
+
+function trimArtistToken(value) {
+    return String(value || '').trim().replace(/^[-_·•/|\\,，、;；&＆]+|[-_·•/|\\,，、;；&＆]+$/g, '').trim();
+}
+
+function splitArtistTokens(artist) {
+    const rawArtist = String(artist || '').trim();
+    if (!rawArtist) return [];
+
+    let normalized = rawArtist.replace(/\s+(feat(?:uring)?\.?|ft\.?|with|x)\s+/ig, '|');
+    normalized = normalized.replace(/[、,，;；|]/g, '|');
+
+    if (containsEastAsianChar(rawArtist)) {
+        normalized = normalized.replace(/[\/／&＆]/g, '|');
+    } else {
+        normalized = normalized.replace(/\s+(?:\/|／|&|＆)\s+/g, '|');
+    }
+
+    const tokens = [];
+    const seen = new Set();
+    normalized.split('|').forEach((item) => {
+        const token = trimArtistToken(item);
+        const key = token.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        tokens.push(token);
+    });
+
+    return tokens.length > 0 ? tokens : [rawArtist];
+}
+
+function buildArtistSearchURL(source, artist) {
+    const params = new URLSearchParams({
+        q: String(artist || ''),
+        type: 'song',
+        exact_artist: String(artist || ''),
+        sources: String(source || '')
+    });
+    return `${API_ROOT}/search?${params.toString()}`;
+}
+
+function buildAlbumDetailURL(source, albumId) {
+    const params = new URLSearchParams({
+        id: String(albumId || ''),
+        source: String(source || '')
+    });
+    return `${API_ROOT}/album?${params.toString()}`;
+}
+
+function buildAlbumJumpURL(source, album, artist) {
+    const params = new URLSearchParams({
+        name: String(album || ''),
+        artist: String(artist || ''),
+        source: String(source || '')
+    });
+    return `${API_ROOT}/album_jump?${params.toString()}`;
+}
+
+function getSongAlbumId(song) {
+    if (song && song.album_id) return String(song.album_id);
+    if (song && song.albumId) return String(song.albumId);
+    if (song && song.extra && typeof song.extra === 'object' && song.extra.album_id) {
+        return String(song.extra.album_id);
+    }
+    return '';
+}
+
+function renderArtistLineHTML(song) {
+    const artists = splitArtistTokens(song.artist || '');
+    const parts = ['<i class="fa-regular fa-user artist-icon"></i>'];
+
+    if (artists.length > 0) {
+        artists.forEach((artist, index) => {
+            if (index > 0) {
+                parts.push('<span class="meta-separator">/</span>');
+            }
+            parts.push(`<a href="${buildArtistSearchURL(song.source, artist)}" class="meta-link artist-link">${escapeHTML(artist)}</a>`);
+        });
+    } else {
+        parts.push('<span>-</span>');
+    }
+
+    if (song.album) {
+        const albumId = getSongAlbumId(song);
+        parts.push('<span class="meta-separator">&middot;</span>');
+        const href = albumId
+            ? buildAlbumDetailURL(song.source, albumId)
+            : buildAlbumJumpURL(song.source, song.album, song.artist || '');
+        parts.push(`<a href="${href}" class="meta-link album-link">${escapeHTML(song.album)}</a>`);
+    }
+
+    return parts.join('');
+}
+
 function updateCardWithSong(card, song) {
     const oldId = card.dataset.id; 
 
     card.dataset.id = song.id;
     card.dataset.source = song.source;
+    card.dataset.albumId = getSongAlbumId(song);
     card.dataset.duration = song.duration || 0;
     card.dataset.name = song.name || card.dataset.name;
     card.dataset.artist = song.artist || card.dataset.artist;
@@ -731,8 +847,7 @@ function updateCardWithSong(card, song) {
 
     const artistLine = card.querySelector('.artist-line');
     if (artistLine) {
-        const albumText = song.album ? ` &nbsp;•&nbsp; ${song.album}` : '';
-        artistLine.innerHTML = `<i class="fa-regular fa-user" style="font-size:11px;"></i> ${song.artist || ''}${albumText}`;
+        artistLine.innerHTML = renderArtistLineHTML(song);
     }
 
     const sourceTag = card.querySelector('.tag-src');

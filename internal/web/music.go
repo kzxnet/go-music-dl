@@ -61,6 +61,7 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 	api.GET("/search", func(c *gin.Context) {
 		keyword := strings.TrimSpace(c.Query("q"))
 		searchType := c.DefaultQuery("type", "song")
+		exactArtist := strings.TrimSpace(c.Query("exact_artist"))
 		sources := c.QueryArray("sources")
 
 		if len(sources) == 0 {
@@ -170,6 +171,10 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 			wg.Wait()
 		}
 
+		if searchType == "song" && exactArtist != "" && len(allSongs) > 0 {
+			allSongs = filterSongsByExactArtist(allSongs, exactArtist)
+		}
+
 		renderIndex(c, allSongs, allPlaylists, keyword, sources, errorMsg, searchType, "", "", "", false)
 	})
 
@@ -213,6 +218,45 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 		}
 		albumLink := core.GetOriginalLink(src, id, "album")
 		renderIndex(c, songs, nil, "", []string{src}, errMsg, "album", albumLink, "", "", false)
+	})
+
+	api.GET("/album_jump", func(c *gin.Context) {
+		name := strings.TrimSpace(c.Query("name"))
+		artist := strings.TrimSpace(c.Query("artist"))
+		src := strings.TrimSpace(c.Query("source"))
+		if name == "" || src == "" {
+			renderIndex(c, nil, nil, "", nil, "缺少参数", "album", "", "", "", false)
+			return
+		}
+
+		fn := core.GetAlbumSearchFunc(src)
+		if fn == nil {
+			renderIndex(c, nil, nil, name, []string{src}, "该源不支持查看专辑详情", "album", "", "", "", false)
+			return
+		}
+
+		albums, err := fn(name)
+		if err != nil {
+			renderIndex(c, nil, nil, name, []string{src}, fmt.Sprintf("获取专辑失败: %v", err), "album", "", "", "", false)
+			return
+		}
+		if len(albums) == 0 {
+			renderIndex(c, nil, nil, name, []string{src}, "未找到匹配的专辑", "album", "", "", "", false)
+			return
+		}
+
+		for i := range albums {
+			albums[i].Source = src
+		}
+
+		selected := pickBestAlbumMatch(name, artist, albums)
+		if selected == nil || strings.TrimSpace(selected.ID) == "" {
+			renderIndex(c, nil, nil, name, []string{src}, "未找到可跳转的专辑详情", "album", "", "", "", false)
+			return
+		}
+
+		target := fmt.Sprintf("%s/album?id=%s&source=%s", RoutePrefix, url.QueryEscape(selected.ID), url.QueryEscape(src))
+		c.Redirect(http.StatusFound, target)
 	})
 
 	api.GET("/inspect", func(c *gin.Context) {
@@ -313,9 +357,11 @@ func RegisterMusicRoutes(api *gin.RouterGroup) {
 			"name":     selected.Name,
 			"artist":   selected.Artist,
 			"album":    selected.Album,
+			"album_id": selected.AlbumID,
 			"duration": selected.Duration,
 			"source":   selected.Source,
 			"cover":    selected.Cover,
+			"extra":    selected.Extra,
 			"score":    selectedScore,
 			"link":     selected.Link,
 		})

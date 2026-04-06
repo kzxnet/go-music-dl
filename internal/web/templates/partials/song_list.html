@@ -49,9 +49,13 @@
 
     <ul class="result-list">
         {{ range .Result }}
+        {{ $song := . }}
+        {{ $artists := artistTokens .Artist }}
+        {{ $albumID := albumID . }}
         <li class="song-card"
             data-id="{{.ID}}"
             data-source="{{.Source}}"
+            data-album-id="{{ $albumID }}"
             data-duration="{{.Duration}}"
             data-name="{{.Name}}"
             data-artist="{{.Artist}}"
@@ -79,8 +83,23 @@
                     {{ end }}
                 </h3>
                 <div class="artist-line">
-                    <i class="fa-regular fa-user" style="font-size:11px;"></i> {{ .Artist }}
-                    {{ if .Album }} &nbsp;•&nbsp; {{ .Album }}{{ end }}
+                    <i class="fa-regular fa-user artist-icon"></i>
+                    {{ if gt (len $artists) 0 }}
+                        {{ range $index, $artist := $artists }}
+                            {{ if gt $index 0 }}<span class="meta-separator">/</span>{{ end }}
+                            <a href="{{$.Root}}/search?q={{urlquery $artist}}&type=song&exact_artist={{urlquery $artist}}&sources={{urlquery $song.Source}}" class="meta-link artist-link">{{ $artist }}</a>
+                        {{ end }}
+                    {{ else }}
+                        <span>-</span>
+                    {{ end }}
+                    {{ if .Album }}
+                        <span class="meta-separator">&middot;</span>
+                        {{ if $albumID }}
+                            <a href="{{$.Root}}/album?id={{urlquery $albumID}}&source={{urlquery $song.Source}}" class="meta-link album-link">{{ .Album }}</a>
+                        {{ else }}
+                            <a href="{{$.Root}}/album_jump?name={{urlquery .Album}}&artist={{urlquery .Artist}}&source={{urlquery $song.Source}}" class="meta-link album-link">{{ .Album }}</a>
+                        {{ end }}
+                    {{ end }}
                 </div>
                 <div class="tags">
                     <span class="tag tag-src">{{ .Source }}</span>

@@ -208,6 +208,8 @@ func Start(port string, shouldOpenBrowser bool, flags FeatureFlags) {
 	r.Use(corsMiddleware())
 
 	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
+		"artistTokens": splitArtistTokens,
+		"albumID":      songAlbumID,
 		"tojson": func(v interface{}) string {
 			if v == nil {
 				return ""
