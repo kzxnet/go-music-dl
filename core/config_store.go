@@ -41,6 +41,10 @@ type WebSettings struct {
 	WebPageSize         int    `json:"webPageSize"`
 	CliPageSize         int    `json:"cliPageSize"`
 	DownloadConcurrency int    `json:"downloadConcurrency"`
+	VgChangeCover       bool   `json:"vgChangeCover"`
+	VgChangeAudio       bool   `json:"vgChangeAudio"`
+	VgChangeLyric       bool   `json:"vgChangeLyric"`
+	VgExportVideo       bool   `json:"vgExportVideo"`
 }
 
 var (

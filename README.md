@@ -163,12 +163,14 @@ docker run -d --name music-dl \
   --user 1000:1000 \
   --restart unless-stopped \
   guohuiyuan/go-music-dl:latest \
-  ./music-dl web --port 8080 --no-browser --vg-cover --vg-audio --vg-lyric --vg-export
+  ./music-dl web --port 8080 --no-browser
 
 # Windows PowerShell
-docker run -d --name music-dl -p 8080:8080 -v ${PWD}/data:/home/appuser/data -e TZ=Asia/Shanghai --user 1000:1000 --restart unless-stopped guohuiyuan/go-music-dl:latest ./music-dl web --port 8080 --no-browser --vg-cover --vg-audio --vg-lyric --vg-export
+docker run -d --name music-dl -p 8080:8080 -v ${PWD}/data:/home/appuser/data -e TZ=Asia/Shanghai --user 1000:1000 --restart unless-stopped guohuiyuan/go-music-dl:latest ./music-dl web --port 8080 --no-browser
 
 ```
+
+视频生成相关的“更换封面 / 更换音频 / 更换歌词 / 导出视频”按钮已迁移到 Web 设置中管理，默认关闭，可在网页右上角设置面板中开启。
 
 *提示：首次运行前可先创建 `data` 目录（如 `mkdir -p data && chmod 777 data`），便于宿主机直接访问下载与配置数据。*
 

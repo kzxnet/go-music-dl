@@ -4,9 +4,9 @@
         <img id="vg-bg-img" class="vg-bg-content is-image" src="">
         <video id="vg-bg-video" class="vg-bg-content" autoplay loop muted style="display:none;"></video>
     </div>
-    
+
     <div class="vg-close" onclick="VideoGen.close()"><i class="fa-solid fa-xmark"></i></div>
-    
+
     <div class="vg-container" id="vg-ui-container">
         <div class="vg-left">
             <div class="vg-disc-container" id="vg-disc-container">
@@ -33,7 +33,7 @@
                         <i id="vg-play-toggle-icon" class="fa-solid fa-play"></i>
                     </div>
                     <div class="vg-ctrl-icon" onclick="VideoGen.playNext()" title="下一首"><i class="fa-solid fa-forward-step"></i></div>
-                    
+
                     <div class="vg-vol-group">
                         <i class="fa-solid fa-volume-high vg-ctrl-icon" id="vg-vol-icon" onclick="VideoGen.toggleMute()" title="静音/恢复" style="width: auto; height: auto;"></i>
                         <input type="range" id="vg-volume-bar" class="vg-seek-bar" value="70" step="1" min="0" max="100">
@@ -41,34 +41,34 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="vg-controls" id="vg-controls">
-                {{if $.VgChangeCover}}
-                <input type="file" id="vg-file-input" accept="image/*,video/mp4" style="display:none;" onchange="VideoGen.handleFileSelect(this)">
-                <button class="vg-btn-icon" onclick="document.getElementById('vg-file-input').click()" title="更换封面/背景">
-                    <i class="fa-regular fa-image"></i>
-                </button>
-                {{end}}
+                <div id="vg-feature-change-cover" data-vg-setting="vgChangeCover" style="display:none;">
+                    <input type="file" id="vg-file-input" accept="image/*,video/mp4" style="display:none;" onchange="VideoGen.handleFileSelect(this)">
+                    <button class="vg-btn-icon" onclick="document.getElementById('vg-file-input').click()" title="更换封面/背景">
+                        <i class="fa-regular fa-image"></i>
+                    </button>
+                </div>
 
-                {{if $.VgChangeAudio}}
-                <input type="file" id="vg-audio-input" accept="audio/*" style="display:none;" onchange="VideoGen.handleAudioSelect(this)">
-                <button class="vg-btn-icon" onclick="document.getElementById('vg-audio-input').click()" title="更换本地音频 (仅限网页预览)">
-                    <i class="fa-solid fa-music"></i>
-                </button>
-                {{end}}
+                <div id="vg-feature-change-audio" data-vg-setting="vgChangeAudio" style="display:none;">
+                    <input type="file" id="vg-audio-input" accept="audio/*" style="display:none;" onchange="VideoGen.handleAudioSelect(this)">
+                    <button class="vg-btn-icon" onclick="document.getElementById('vg-audio-input').click()" title="更换本地音频 (仅限网页预览)">
+                        <i class="fa-solid fa-music"></i>
+                    </button>
+                </div>
 
-                {{if $.VgChangeLyric}}
-                <input type="file" id="vg-lyric-input" accept=".lrc,.txt" style="display:none;" onchange="VideoGen.handleLyricSelect(this)">
-                <button class="vg-btn-icon" onclick="document.getElementById('vg-lyric-input').click()" title="更换本地歌词 (.lrc)">
-                    <i class="fa-solid fa-file-lines"></i>
-                </button>
-                {{end}}
+                <div id="vg-feature-change-lyric" data-vg-setting="vgChangeLyric" style="display:none;">
+                    <input type="file" id="vg-lyric-input" accept=".lrc,.txt" style="display:none;" onchange="VideoGen.handleLyricSelect(this)">
+                    <button class="vg-btn-icon" onclick="document.getElementById('vg-lyric-input').click()" title="更换本地歌词 (.lrc)">
+                        <i class="fa-solid fa-file-lines"></i>
+                    </button>
+                </div>
 
-                {{if $.VgExportVideo}}
-                <button class="vg-btn-gen" onclick="VideoGen.startRendering()">
-                    <i class="fa-solid fa-clapperboard"></i> 导出视频
-                </button>
-                {{end}}
+                <div id="vg-feature-export-video" data-vg-setting="vgExportVideo" style="display:none;">
+                    <button class="vg-btn-gen" onclick="VideoGen.startRendering()">
+                        <i class="fa-solid fa-clapperboard"></i> 导出视频
+                    </button>
+                </div>
             </div>
         </div>
 

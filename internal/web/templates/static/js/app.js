@@ -10,7 +10,11 @@ let webSettings = {
     downloadToLocal: false,
     downloadDir: 'data/downloads',
     webPageSize: DEFAULT_WEB_PAGE_SIZE,
-    cliPageSize: DEFAULT_CLI_PAGE_SIZE
+    cliPageSize: DEFAULT_CLI_PAGE_SIZE,
+    vgChangeCover: false,
+    vgChangeAudio: false,
+    vgChangeLyric: false,
+    vgExportVideo: false
 };
 
 function normalizeWebSettings(raw) {
@@ -19,7 +23,11 @@ function normalizeWebSettings(raw) {
         downloadToLocal: false,
         downloadDir: 'data/downloads',
         webPageSize: DEFAULT_WEB_PAGE_SIZE,
-        cliPageSize: DEFAULT_CLI_PAGE_SIZE
+        cliPageSize: DEFAULT_CLI_PAGE_SIZE,
+        vgChangeCover: false,
+        vgChangeAudio: false,
+        vgChangeLyric: false,
+        vgExportVideo: false
     };
 
     if (!raw || typeof raw !== 'object') {
@@ -41,6 +49,18 @@ function normalizeWebSettings(raw) {
     if (Number.isInteger(raw.cliPageSize) && raw.cliPageSize > 0) {
         next.cliPageSize = Math.min(raw.cliPageSize, 200);
     }
+    if (typeof raw.vgChangeCover === 'boolean') {
+        next.vgChangeCover = raw.vgChangeCover;
+    }
+    if (typeof raw.vgChangeAudio === 'boolean') {
+        next.vgChangeAudio = raw.vgChangeAudio;
+    }
+    if (typeof raw.vgChangeLyric === 'boolean') {
+        next.vgChangeLyric = raw.vgChangeLyric;
+    }
+    if (typeof raw.vgExportVideo === 'boolean') {
+        next.vgExportVideo = raw.vgExportVideo;
+    }
     return next;
 }
 
@@ -59,6 +79,21 @@ function persistWebSettingsCache() {
         localStorage.setItem(WEB_SETTINGS_KEY, JSON.stringify(webSettings));
     } catch (_) {
     }
+}
+
+function applyVideoGenFeatureVisibility() {
+    const featureDisplayMap = {
+        vgChangeCover: 'vg-feature-change-cover',
+        vgChangeAudio: 'vg-feature-change-audio',
+        vgChangeLyric: 'vg-feature-change-lyric',
+        vgExportVideo: 'vg-feature-export-video'
+    };
+
+    Object.entries(featureDisplayMap).forEach(([key, elementId]) => {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        element.style.display = webSettings[key] ? 'flex' : 'none';
+    });
 }
 
 function applyWebSettings(settings) {
@@ -90,6 +125,27 @@ function applyWebSettings(settings) {
         cliPageSizeInput.value = String(webSettings.cliPageSize || DEFAULT_CLI_PAGE_SIZE);
     }
 
+    const vgChangeCoverToggle = document.getElementById('setting-vg-change-cover');
+    if (vgChangeCoverToggle) {
+        vgChangeCoverToggle.checked = webSettings.vgChangeCover;
+    }
+
+    const vgChangeAudioToggle = document.getElementById('setting-vg-change-audio');
+    if (vgChangeAudioToggle) {
+        vgChangeAudioToggle.checked = webSettings.vgChangeAudio;
+    }
+
+    const vgChangeLyricToggle = document.getElementById('setting-vg-change-lyric');
+    if (vgChangeLyricToggle) {
+        vgChangeLyricToggle.checked = webSettings.vgChangeLyric;
+    }
+
+    const vgExportVideoToggle = document.getElementById('setting-vg-export-video');
+    if (vgExportVideoToggle) {
+        vgExportVideoToggle.checked = webSettings.vgExportVideo;
+    }
+
+    applyVideoGenFeatureVisibility();
     refreshDownloadLinks();
 }
 
@@ -798,7 +854,11 @@ function saveCookies() {
         downloadToLocal: !!document.getElementById('setting-download-to-local')?.checked,
         downloadDir: document.getElementById('setting-download-dir')?.value || '',
         webPageSize: parsePositiveInt(webPageSizeInput?.value, DEFAULT_WEB_PAGE_SIZE),
-        cliPageSize: parsePositiveInt(cliPageSizeInput?.value, DEFAULT_CLI_PAGE_SIZE)
+        cliPageSize: parsePositiveInt(cliPageSizeInput?.value, DEFAULT_CLI_PAGE_SIZE),
+        vgChangeCover: !!document.getElementById('setting-vg-change-cover')?.checked,
+        vgChangeAudio: !!document.getElementById('setting-vg-change-audio')?.checked,
+        vgChangeLyric: !!document.getElementById('setting-vg-change-lyric')?.checked,
+        vgExportVideo: !!document.getElementById('setting-vg-export-video')?.checked
     });
 
     const data = {};

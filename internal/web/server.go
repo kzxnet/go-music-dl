@@ -22,16 +22,6 @@ var templateFS embed.FS
 
 const RoutePrefix = "/music"
 
-// FeatureFlags controls optional frontend buttons.
-type FeatureFlags struct {
-	VgChangeCover bool
-	VgChangeAudio bool
-	VgChangeLyric bool
-	VgExportVideo bool
-}
-
-var featureFlags FeatureFlags
-
 type importCollectionMeta struct {
 	Enabled     bool
 	Name        string
@@ -262,15 +252,10 @@ func renderIndex(c *gin.Context, songs []model.Song, playlists []model.Playlist,
 		"ImportCollection":   importCollection,
 		"CanRemoveSongs":     colID != "" && collectionKind == collectionKindManual,
 		"IsLocalColPage":     isLocalColPage,
-		"VgChangeCover":      featureFlags.VgChangeCover,
-		"VgChangeAudio":      featureFlags.VgChangeAudio,
-		"VgChangeLyric":      featureFlags.VgChangeLyric,
-		"VgExportVideo":      featureFlags.VgExportVideo,
 	})
 }
 
-func Start(port string, shouldOpenBrowser bool, flags FeatureFlags) {
-	featureFlags = flags
+func Start(port string, shouldOpenBrowser bool) {
 	core.CM.Load()
 	InitDB()
 	defer CloseDB()
@@ -318,8 +303,7 @@ func Start(port string, shouldOpenBrowser bool, flags FeatureFlags) {
 	api.GET("/app.js", func(c *gin.Context) { c.FileFromFS("templates/static/js/app.js", http.FS(templateFS)) })
 	api.GET("/render", func(c *gin.Context) {
 		c.HTML(200, "render.html", gin.H{
-			"Root":          RoutePrefix,
-			"VgExportVideo": featureFlags.VgExportVideo,
+			"Root": RoutePrefix,
 		})
 	})
 

@@ -45,6 +45,38 @@
                 <input type="number" id="setting-cli-page-size" min="1" max="200" step="1" placeholder="默认 50">
                 <p class="setting-hint" style="margin-left: 0;">用于 TUI 分页显示，默认 50。</p>
             </div>
+            <div class="cookie-item setting-item">
+                <label class="setting-toggle" for="setting-vg-change-cover">
+                    <input type="checkbox" id="setting-vg-change-cover">
+                    <span class="setting-switch" aria-hidden="true"></span>
+                    <span class="setting-toggle-text">显示“更换封面/背景”按钮</span>
+                </label>
+                <p class="setting-hint">控制视频生成弹窗中的本地封面/背景替换入口，默认隐藏。</p>
+            </div>
+            <div class="cookie-item setting-item">
+                <label class="setting-toggle" for="setting-vg-change-audio">
+                    <input type="checkbox" id="setting-vg-change-audio">
+                    <span class="setting-switch" aria-hidden="true"></span>
+                    <span class="setting-toggle-text">显示“更换音频”按钮</span>
+                </label>
+                <p class="setting-hint">控制视频生成弹窗中的本地音频替换入口，默认隐藏。</p>
+            </div>
+            <div class="cookie-item setting-item">
+                <label class="setting-toggle" for="setting-vg-change-lyric">
+                    <input type="checkbox" id="setting-vg-change-lyric">
+                    <span class="setting-switch" aria-hidden="true"></span>
+                    <span class="setting-toggle-text">显示“更换歌词”按钮</span>
+                </label>
+                <p class="setting-hint">控制视频生成弹窗中的本地歌词替换入口，默认隐藏。</p>
+            </div>
+            <div class="cookie-item setting-item">
+                <label class="setting-toggle" for="setting-vg-export-video">
+                    <input type="checkbox" id="setting-vg-export-video">
+                    <span class="setting-switch" aria-hidden="true"></span>
+                    <span class="setting-toggle-text">显示“导出视频”按钮</span>
+                </label>
+                <p class="setting-hint">控制视频生成弹窗中的导出视频入口，默认隐藏。</p>
+            </div>
             <button class="btn-save" onclick="saveCookies()">保存设置</button>
         </div>
     </div>

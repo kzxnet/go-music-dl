@@ -101,6 +101,18 @@ func TestWebSettingsDefaultAndPersist(t *testing.T) {
 	if defaults.DownloadConcurrency != DefaultWebConcurrency {
 		t.Fatalf("default DownloadConcurrency mismatch: got %d want %d", defaults.DownloadConcurrency, DefaultWebConcurrency)
 	}
+	if defaults.VgChangeCover {
+		t.Fatalf("default VgChangeCover should be false")
+	}
+	if defaults.VgChangeAudio {
+		t.Fatalf("default VgChangeAudio should be false")
+	}
+	if defaults.VgChangeLyric {
+		t.Fatalf("default VgChangeLyric should be false")
+	}
+	if defaults.VgExportVideo {
+		t.Fatalf("default VgExportVideo should be false")
+	}
 
 	if err := SaveWebSettings(WebSettings{
 		EmbedDownload:       true,
@@ -109,6 +121,10 @@ func TestWebSettingsDefaultAndPersist(t *testing.T) {
 		WebPageSize:         100,
 		CliPageSize:         120,
 		DownloadConcurrency: 5,
+		VgChangeCover:       true,
+		VgChangeAudio:       true,
+		VgChangeLyric:       true,
+		VgExportVideo:       true,
 	}); err != nil {
 		t.Fatalf("save web settings: %v", err)
 	}
@@ -121,6 +137,10 @@ func TestWebSettingsDefaultAndPersist(t *testing.T) {
 		WebPageSize:         100,
 		CliPageSize:         120,
 		DownloadConcurrency: 5,
+		VgChangeCover:       true,
+		VgChangeAudio:       true,
+		VgChangeLyric:       true,
+		VgExportVideo:       true,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("saved settings mismatch\ngot:  %#v\nwant: %#v", got, want)
@@ -145,6 +165,9 @@ func TestWebSettingsDefaultAndPersist(t *testing.T) {
 	}
 	if got.DownloadConcurrency != DefaultWebConcurrency {
 		t.Fatalf("custom save should fallback DownloadConcurrency to default: got %d want %d", got.DownloadConcurrency, DefaultWebConcurrency)
+	}
+	if got.VgChangeCover || got.VgChangeAudio || got.VgChangeLyric || got.VgExportVideo {
+		t.Fatalf("custom save should fallback video generator settings to default false: %#v", got)
 	}
 
 	absoluteDir := filepath.Join(baseDir, "downloads", "absolute")
