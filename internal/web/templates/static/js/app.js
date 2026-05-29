@@ -34,7 +34,7 @@ function isLocalMusicSourceValue(source) {
 
 let webSettings = {
     embedDownload: false,
-    downloadToLocal: false,
+    downloadToLocal: true,
     downloadDir: 'data/downloads',
     downloadFilenameTemplate: '{name} - {artist}',
     disableFloatingLyrics: false,
@@ -53,7 +53,7 @@ let webSettings = {
 function normalizeWebSettings(raw) {
     const next = {
         embedDownload: false,
-        downloadToLocal: false,
+        downloadToLocal: true,
         downloadDir: 'data/downloads',
         downloadFilenameTemplate: '{name} - {artist}',
         disableFloatingLyrics: false,
@@ -75,9 +75,6 @@ function normalizeWebSettings(raw) {
 
     if (typeof raw.embedDownload === 'boolean') {
         next.embedDownload = raw.embedDownload;
-    }
-    if (typeof raw.downloadToLocal === 'boolean') {
-        next.downloadToLocal = raw.downloadToLocal;
     }
     if (typeof raw.downloadDir === 'string' && raw.downloadDir.trim() !== '') {
         next.downloadDir = raw.downloadDir.trim();
@@ -227,10 +224,6 @@ function applyWebSettings(settings) {
         embedToggle.checked = webSettings.embedDownload;
     }
 
-    const localToggle = document.getElementById('setting-download-to-local');
-    if (localToggle) {
-        localToggle.checked = webSettings.downloadToLocal;
-    }
 
     const dirInput = document.getElementById('setting-download-dir');
     if (dirInput) {
@@ -388,7 +381,7 @@ function buildStreamURL(id, source, name, artist, album, cover, extra) {
 function buildDownloadURL(id, source, name, artist, album, cover, extra) {
     return buildDownloadRequestURL(id, source, name, artist, album, cover, extra, {
         embed: webSettings.embedDownload,
-        saveLocal: webSettings.downloadToLocal
+        saveLocal: true
     });
 }
 
@@ -415,7 +408,7 @@ function buildLyricRequestURL(song, endpoint = 'lyric', format = 'auto') {
     if (extraValue && extraValue !== '{}' && extraValue !== 'null') {
         params.set('extra', extraValue);
     }
-    if (endpoint === 'download_lrc' && webSettings.downloadToLocal) {
+    if (endpoint === 'download_lrc') {
         params.set('save_local', '1');
     }
 
@@ -441,7 +434,7 @@ function updateDownloadButton(link) {
 
     const ds = card.dataset;
     link.href = buildDownloadURL(ds.id, ds.source, ds.name, ds.artist, ds.album || '', ds.cover || '', ds.extra || '');
-    link.title = webSettings.downloadToLocal ? '保存到本地目录' : '下载歌曲';
+    link.title = '保存到本地目录';
 }
 
 function updateBrowserDownloadButton(link) {
@@ -452,7 +445,7 @@ function updateBrowserDownloadButton(link) {
 
     const ds = card.dataset;
     link.href = buildBrowserDownloadURL(ds.id, ds.source, ds.name, ds.artist, ds.album || '', ds.cover || '', ds.extra || '');
-    link.title = webSettings.embedDownload ? '浏览器下载（内嵌元数据）' : '浏览器下载';
+    link.title = '浏览器下载';
 }
 
 function updateLyricButton(link) {
@@ -473,18 +466,14 @@ function buildCoverDownloadURL(song) {
         params.set('download', '1');
         params.set('name', String(song?.name || ''));
         params.set('artist', String(song?.artist || ''));
-        if (webSettings.downloadToLocal) {
-            params.set('save_local', '1');
-        }
+        params.set('save_local', '1');
         return `${API_ROOT}/local_music/cover?${params.toString()}`;
     }
 
     params.set('url', String(song?.cover || 'https://via.placeholder.com/600?text=No+Cover'));
     params.set('name', String(song?.name || ''));
     params.set('artist', String(song?.artist || ''));
-    if (webSettings.downloadToLocal) {
-        params.set('save_local', '1');
-    }
+    params.set('save_local', '1');
     return `${API_ROOT}/download_cover?${params.toString()}`;
 }
 
@@ -656,20 +645,13 @@ async function handleDownloadClick(link) {
     link.style.pointerEvents = 'none';
     link.style.opacity = '0.6';
     try {
-        if (webSettings.downloadToLocal) {
-            const data = await requestLocalDownload(link.href);
-            let message = data.path || webSettings.downloadDir;
-            if (data.warning) {
-                message += `\n提示: ${data.warning}`;
-            }
-            showToast('下载完成', message, data.warning ? 'warning' : 'success');
-            return true;
+        const data = await requestLocalDownload(link.href);
+        let message = data.path || webSettings.downloadDir;
+        if (data.warning) {
+            message += `\n提示: ${data.warning}`;
         }
-
-        if (webSettings.embedDownload) {
-            await requestBrowserDownload({ url: link.href });
-            return true;
-        }
+        showToast('下载完成', message, data.warning ? 'warning' : 'success');
+        return true;
     } catch (error) {
         showToast('下载失败', error.message || '下载失败', 'error');
     } finally {
@@ -1019,8 +1001,6 @@ function bindPageNavigationEvents() {
     document.addEventListener('click', async function(event) {
         const link = event.target.closest('.btn-download, .btn-lyric, .btn-cover');
         if (!link) return;
-        const isSongDownload = link.classList.contains('btn-download');
-        if (!webSettings.downloadToLocal && !(isSongDownload && webSettings.embedDownload)) return;
         event.preventDefault();
         await handleDownloadClick(link);
     });
@@ -2573,7 +2553,6 @@ async function saveCookies() {
 
     const nextSettings = normalizeWebSettings({
         embedDownload: !!document.getElementById('setting-embed-download')?.checked,
-        downloadToLocal: !!document.getElementById('setting-download-to-local')?.checked,
         downloadDir: document.getElementById('setting-download-dir')?.value || '',
         downloadFilenameTemplate: document.getElementById('setting-download-filename-template')?.value || '',
         disableFloatingLyrics: !document.getElementById('setting-floating-lyrics')?.checked,
@@ -3760,14 +3739,14 @@ function updateCardWithSong(card, song, options = {}) {
     if (dl) {
         dl.href = buildDownloadURL(song.id, song.source, song.name, song.artist, song.album || '', song.cover || '', card.dataset.extra || '');
         dl.id = `dl-${song.id}`;
-        dl.title = webSettings.downloadToLocal ? '保存到本地目录' : '下载歌曲';
+        dl.title = '保存到本地目录';
     }
 
     const browserDl = card.querySelector('.btn-browser-download');
     if (browserDl) {
         browserDl.href = buildBrowserDownloadURL(song.id, song.source, song.name, song.artist, song.album || '', song.cover || '', card.dataset.extra || '');
         browserDl.id = `browser-dl-${song.id}`;
-        browserDl.title = webSettings.embedDownload ? '浏览器下载（内嵌元数据）' : '浏览器下载';
+        browserDl.title = '浏览器下载';
     }
 
     const lrc = card.querySelector('.btn-lyric');
@@ -4071,14 +4050,8 @@ async function batchDownload() {
     const originalBatchDlHTML = batchDl ? batchDl.innerHTML : '';
 
     const skipText = skippedLocalCount > 0 ? `\n已跳过 ${skippedLocalCount} 首本地歌曲。` : '';
-    if (webSettings.downloadToLocal) {
-        if (!confirm(`准备将 ${songs.length} 首歌曲保存到本地目录:\n${webSettings.downloadDir}${skipText}`)) {
-            return;
-        }
-    } else {
-        if (!confirm(`准备下载 ${songs.length} 首歌曲。\n下载会依次交给浏览器下载管理器，请保持页面打开。${skipText}`)) {
-            return;
-        }
+    if (!confirm(`准备将 ${songs.length} 首歌曲保存到本地目录:\n${webSettings.downloadDir}${skipText}`)) {
+        return;
     }
 
     if (batchDl) {
@@ -4096,9 +4069,7 @@ async function batchDownload() {
     try {
         for (const song of songs) {
             try {
-                const result = webSettings.downloadToLocal
-                    ? await requestLocalDownload(song.url)
-                    : await requestBrowserDownload(song);
+                const result = await requestLocalDownload(song.url);
                 success++;
                 if (result && result.warning) {
                     warningCount++;
@@ -4111,16 +4082,12 @@ async function batchDownload() {
             }
         }
 
-        let message = webSettings.downloadToLocal
-            ? `本地保存完成，成功 ${success}/${songs.length}`
-            : `批量下载已触发，成功 ${success}/${songs.length}`;
+        let message = `本地保存完成，成功 ${success}/${songs.length}`;
 
         if (skippedLocalCount > 0) {
             message += `\n已跳过 ${skippedLocalCount} 首本地歌曲。`;
         }
-        if (webSettings.downloadToLocal) {
-            message += `\n目录：${webSettings.downloadDir}`;
-        }
+        message += `\n目录：${webSettings.downloadDir}`;
         if (warningCount > 0) {
             message += `\n\n共 ${warningCount} 首触发了降级提示，请查看终端日志`;
         }

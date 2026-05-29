@@ -235,7 +235,7 @@
 
                 {{ if not $isLocalSong }}
                 <a href="{{$.Root}}/download?id={{.ID}}&source={{.Source}}&name={{.Name}}&artist={{.Artist}}&album={{urlquery .Album}}&cover={{urlquery .Cover}}&extra={{urlquery (tojson .Extra)}}"
-                   id="dl-{{.ID}}" class="btn-circle btn-dl btn-download" title="下载歌曲" target="_blank">
+                   id="dl-{{.ID}}" class="btn-circle btn-dl btn-download" title="保存到本地目录" target="_blank">
                     <i class="fa-solid fa-download"></i>
                 </a>
                 <a href="{{$.Root}}/download?id={{.ID}}&source={{.Source}}&name={{.Name}}&artist={{.Artist}}&album={{urlquery .Album}}&cover={{urlquery .Cover}}&extra={{urlquery (tojson .Extra)}}"
