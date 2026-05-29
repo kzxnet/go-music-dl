@@ -289,11 +289,44 @@
                 FFT.reset();
                 setStatus("超清渲染中", "0%", 30);
                 
+                const canvasToJpegBlob = (targetCanvas, quality) => new Promise((resolve, reject) => {
+                    if (targetCanvas.toBlob) {
+                        targetCanvas.toBlob((blob) => {
+                            if (blob) resolve(blob);
+                            else reject(new Error("Frame encode failed"));
+                        }, "image/jpeg", quality);
+                        return;
+                    }
+
+                    try {
+                        const dataUrl = targetCanvas.toDataURL("image/jpeg", quality);
+                        const payload = dataUrl.split(",")[1] || "";
+                        const binary = atob(payload);
+                        const bytes = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                        resolve(new Blob([bytes], { type: "image/jpeg" }));
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+
                 const uploadBatch = async (frames, startIdx) => {
-                    await fetch(`${apiRoot}/videogen/frame`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ session_id: initRes.session_id, frames: frames, start_idx: startIdx })
+                    const form = new FormData();
+                    form.append("session_id", initRes.session_id);
+                    form.append("start_idx", String(startIdx));
+                    frames.forEach((blob, index) => {
+                        const frameNum = String(startIdx + index).padStart(5, "0");
+                        form.append("frames", blob, `frame_${frameNum}.jpg`);
                     });
+
+                    const res = await fetch(`${apiRoot}/videogen/frame`, {
+                        method: "POST",
+                        body: form
+                    });
+                    const body = await res.json().catch(() => ({}));
+                    if (!res.ok || body.error) {
+                        throw new Error(body.error || `Frame upload failed: ${res.status}`);
+                    }
                 };
                 
                 const seekVideo = async (time) => {
@@ -614,7 +647,7 @@
                     const fftSize = 2048; 
                     const startSample = Math.max(0, Math.floor((frameIdx * samplesPerFrame) - (fftSize / 4))); 
                     
-                    let pcmSlice = rawData.slice(startSample, startSample + fftSize);
+                    let pcmSlice = rawData.subarray(startSample, startSample + fftSize);
                     if (pcmSlice.length < fftSize) {
                         const padded = new Float32Array(fftSize);
                         padded.set(pcmSlice); pcmSlice = padded;
@@ -672,8 +705,10 @@
                     
                     ctx.restore(); 
                     
-                    previewCtx.clearRect(0,0,width,height);
-                    previewCtx.drawImage(canvas, 0, 0);
+                    if (frameIdx % 10 === 0 || frameIdx === totalFrames - 1) {
+                        previewCtx.clearRect(0,0,width,height);
+                        previewCtx.drawImage(canvas, 0, 0);
+                    }
                 };
                 
                 let frameIdx = 0;
@@ -684,7 +719,7 @@
                   const batchStartIdx = frameIdx;
                   for (let i = 0; i < batchSize && frameIdx < totalFrames; i++) {
                     await drawFrame(frameIdx);
-                    framesBuffer.push(canvas.toDataURL("image/jpeg", 0.92));
+                    framesBuffer.push(await canvasToJpegBlob(canvas, 0.92));
                     frameIdx++;
                   }
                   await uploadPromise;
