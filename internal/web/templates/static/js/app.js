@@ -3820,26 +3820,28 @@ function syncSongToAPlayer(oldId, newSong) {
 
 function switchSource(btn) {
     const card = btn.closest('.song-card');
-    if (!card) return;
+    if (!card) return Promise.resolve(false);
 
     const ds = card.dataset;
     const name = ds.name || '';
     const artist = ds.artist || '';
     const source = ds.source || '';
-    if (!name || !source) return;
+    if (!name || !source) return Promise.resolve(false);
 
     btn.disabled = true;
     btn.style.opacity = '0.6';
 
     const duration = ds.duration || '';
     const url = `${API_ROOT}/switch_source?name=${encodeURIComponent(name)}&artist=${encodeURIComponent(artist)}&source=${encodeURIComponent(source)}&duration=${encodeURIComponent(duration)}`;
-    fetch(url)
+    return fetch(url)
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(song => {
             updateCardWithSong(card, song);
+            return true;
         })
         .catch(() => {
             alert('换源失败，请稍后重试');
+            return false;
         })
         .finally(() => {
             btn.disabled = false;
@@ -4235,14 +4237,18 @@ function batchSwitchSource() {
         return;
     }
 
-    cards.forEach((card, index) => {
-        const switchBtn = card.querySelector('.btn-switch');
-        if (switchBtn) {
-            setTimeout(() => {
-                switchSource(switchBtn);
-            }, index * 1000);
+    const concurrency = Math.min(3, cards.length);
+    let nextIndex = 0;
+    const runWorker = async () => {
+        while (nextIndex < cards.length) {
+            const card = cards[nextIndex++];
+            const switchBtn = card.querySelector('.btn-switch');
+            if (switchBtn) {
+                await switchSource(switchBtn);
+            }
         }
-    });
+    };
+    Promise.all(Array.from({ length: concurrency }, runWorker));
 }
 
 async function batchRemoveFromCollection(colId) {

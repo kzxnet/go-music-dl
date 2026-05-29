@@ -1132,6 +1132,28 @@ type switchCandidate struct {
 	durDiff int
 }
 
+type switchSearchResult struct {
+	source     string
+	candidates []switchCandidate
+}
+
+var (
+	switchSearchFuncProvider = func(source string) func(string) ([]model.Song, error) {
+		return core.GetSearchFunc(source)
+	}
+	switchValidatePlayable   = core.ValidatePlayable
+	switchAllSourceNames     = core.GetAllSourceNames
+	switchDefaultSourceNames = core.GetDefaultSourceNames
+)
+
+const (
+	switchMaxCandidatesPerSource     = 8
+	switchSourceSearchTimeout        = 6 * time.Second
+	switchHighConfidenceScore        = 0.98
+	switchParallelValidationLimit    = 12
+	switchParallelValidationParallel = 6
+)
+
 func findBestSwitchSong(name string, artist string, current string, target string, origDuration int) (*model.Song, float64, error) {
 	name = strings.TrimSpace(name)
 	artist = strings.TrimSpace(artist)
@@ -1147,89 +1169,224 @@ func findBestSwitchSong(name string, artist string, current string, target strin
 		keyword = name + " " + artist
 	}
 
-	var sources []string
-	if target != "" {
-		sources = []string{target}
-	} else {
-		sources = core.GetAllSourceNames()
+	sources := switchCandidateSources(current, target)
+	if len(sources) == 0 {
+		return nil, 0, fmt.Errorf("no match")
 	}
 
 	var wg sync.WaitGroup
-	var mu sync.Mutex
+	results := make(chan switchSearchResult, len(sources))
 	var candidates []switchCandidate
 
 	for _, src := range sources {
-		if src == "" || src == current {
-			continue
-		}
-		if src == "soda" || src == "fivesing" {
-			continue
-		}
-		fn := core.GetSearchFunc(src)
-		if fn == nil {
-			continue
-		}
-
 		wg.Add(1)
 		go func(s string, f func(string) ([]model.Song, error)) {
 			defer wg.Done()
-
-			res, err := f(keyword)
-			if (err != nil || len(res) == 0) && artist != "" {
-				res, _ = f(name)
-			}
-			if len(res) == 0 {
+			sourceCandidates := searchSwitchSourceCandidates(s, f, keyword, name, artist, origDuration)
+			if len(sourceCandidates) == 0 {
 				return
 			}
-
-			limit := len(res)
-			if limit > 8 {
-				limit = 8
-			}
-
-			for i := 0; i < limit; i++ {
-				cand := res[i]
-				cand.Source = s
-				score := core.CalcSongSimilarity(name, artist, cand.Name, cand.Artist)
-				if score <= 0 {
-					continue
-				}
-
-				durDiff := 0
-				if origDuration > 0 && cand.Duration > 0 {
-					durDiff = core.IntAbs(origDuration - cand.Duration)
-					if !core.IsDurationClose(origDuration, cand.Duration) {
-						continue
-					}
-				}
-
-				mu.Lock()
-				candidates = append(candidates, switchCandidate{song: cand, score: score, durDiff: durDiff})
-				mu.Unlock()
-			}
-		}(src, fn)
+			results <- switchSearchResult{source: s, candidates: sourceCandidates}
+		}(src, switchSearchFuncProvider(src))
 	}
 
-	wg.Wait()
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	for result := range results {
+		candidates = append(candidates, result.candidates...)
+		sortSwitchCandidates(result.candidates)
+		if len(result.candidates) == 0 {
+			continue
+		}
+
+		best := result.candidates[0]
+		if isHighConfidenceSwitchCandidate(best, origDuration) && switchValidatePlayable(&best.song) {
+			tmp := best.song
+			return &tmp, best.score, nil
+		}
+	}
+
 	if len(candidates) == 0 {
 		return nil, 0, fmt.Errorf("no match")
 	}
 
+	sortSwitchCandidates(candidates)
+	if selected, score, ok := validateSwitchCandidates(candidates); ok {
+		return selected, score, nil
+	}
+
+	return nil, 0, fmt.Errorf("no playable match")
+}
+
+func switchCandidateSources(current string, target string) []string {
+	current = strings.TrimSpace(current)
+	target = strings.TrimSpace(target)
+	if target != "" {
+		if isSwitchSourceAllowed(target, current) && switchSearchFuncProvider(target) != nil {
+			return []string{target}
+		}
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	sources := make([]string, 0)
+	add := func(source string) {
+		source = strings.TrimSpace(source)
+		if seen[source] || !isSwitchSourceAllowed(source, current) || switchSearchFuncProvider(source) == nil {
+			return
+		}
+		seen[source] = true
+		sources = append(sources, source)
+	}
+
+	for _, source := range switchDefaultSourceNames() {
+		add(source)
+	}
+	for _, source := range switchAllSourceNames() {
+		add(source)
+	}
+	return sources
+}
+
+func isSwitchSourceAllowed(source string, current string) bool {
+	if source == "" || source == current {
+		return false
+	}
+	if source == "soda" || source == "fivesing" {
+		return false
+	}
+	return true
+}
+
+func searchSwitchSourceCandidates(source string, fn func(string) ([]model.Song, error), keyword string, name string, artist string, origDuration int) []switchCandidate {
+	type searchResponse struct {
+		songs []model.Song
+		err   error
+	}
+
+	callSearch := func(query string) ([]model.Song, error) {
+		done := make(chan searchResponse, 1)
+		go func() {
+			res, err := fn(query)
+			done <- searchResponse{songs: res, err: err}
+		}()
+		select {
+		case res := <-done:
+			return res.songs, res.err
+		case <-time.After(switchSourceSearchTimeout):
+			return nil, fmt.Errorf("search timeout")
+		}
+	}
+
+	res, err := callSearch(keyword)
+	if (err != nil || len(res) == 0) && artist != "" {
+		res, _ = callSearch(name)
+	}
+	if len(res) == 0 {
+		return nil
+	}
+
+	limit := len(res)
+	if limit > switchMaxCandidatesPerSource {
+		limit = switchMaxCandidatesPerSource
+	}
+
+	candidates := make([]switchCandidate, 0, limit)
+	for i := 0; i < limit; i++ {
+		cand := res[i]
+		cand.Source = source
+		score := core.CalcSongSimilarity(name, artist, cand.Name, cand.Artist)
+		if score <= 0 {
+			continue
+		}
+
+		durDiff := 0
+		if origDuration > 0 && cand.Duration > 0 {
+			durDiff = core.IntAbs(origDuration - cand.Duration)
+			if !core.IsDurationClose(origDuration, cand.Duration) {
+				continue
+			}
+		}
+
+		candidates = append(candidates, switchCandidate{song: cand, score: score, durDiff: durDiff})
+	}
+
+	return candidates
+}
+
+func sortSwitchCandidates(candidates []switchCandidate) {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].score == candidates[j].score {
 			return candidates[i].durDiff < candidates[j].durDiff
 		}
 		return candidates[i].score > candidates[j].score
 	})
+}
 
-	for _, cand := range candidates {
-		if core.ValidatePlayable(&cand.song) {
-			tmp := cand.song
-			return &tmp, cand.score, nil
-		}
+func isHighConfidenceSwitchCandidate(candidate switchCandidate, origDuration int) bool {
+	if candidate.score < switchHighConfidenceScore {
+		return false
+	}
+	if origDuration > 0 && candidate.song.Duration > 0 && candidate.durDiff > 3 {
+		return false
+	}
+	return true
+}
+
+func validateSwitchCandidates(candidates []switchCandidate) (*model.Song, float64, bool) {
+	limit := len(candidates)
+	if limit > switchParallelValidationLimit {
+		limit = switchParallelValidationLimit
+	}
+	candidates = candidates[:limit]
+
+	type validationResult struct {
+		index int
+		valid bool
 	}
 
-	return nil, 0, fmt.Errorf("no playable match")
+	parallel := switchParallelValidationParallel
+	if parallel > len(candidates) {
+		parallel = len(candidates)
+	}
+	if parallel < 1 {
+		parallel = 1
+	}
+
+	jobs := make(chan int, len(candidates))
+	results := make(chan validationResult, len(candidates))
+	var wg sync.WaitGroup
+	for worker := 0; worker < parallel; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range jobs {
+				results <- validationResult{index: index, valid: switchValidatePlayable(&candidates[index].song)}
+			}
+		}()
+	}
+
+	for index := range candidates {
+		jobs <- index
+	}
+	close(jobs)
+	wg.Wait()
+	close(results)
+
+	valid := make([]bool, len(candidates))
+	for result := range results {
+		valid[result.index] = result.valid
+	}
+	for index, ok := range valid {
+		if ok {
+			tmp := candidates[index].song
+			return &tmp, candidates[index].score, true
+		}
+	}
+	return nil, 0, false
 }
 
 func parseSongExtraQuery(raw string) map[string]string {
